@@ -4,7 +4,8 @@
 	.DESCRIPTION
 	Scripts sets fills DRS Host groups and DRS VM groups for all existing cluster in a stretched datacenter
 	and creates DRS Rules with soft VM-to-Host affinity based on the VM's used datastores.
-	The scripts needs to know the ESXi Hosts per site and datastores per site; see the VARS section below
+	The scripts needs to know the ESXi Hosts per site and datastores per site; see the VARS section below.
+	It also mails you a report if needed every runtime and tells you which VM's use datastores from both sites.
 	Only works with two sites!
     .NOTES
     By Jan Jaap van Santen
