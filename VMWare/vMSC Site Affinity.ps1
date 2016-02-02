@@ -1,16 +1,16 @@
 <#  
     .SYNOPSIS
     Sets VM-to-Host soft affinity (should not must) in a vMSC scenario where site affinity is preferred.
-	.DESCRIPTION
-	Scripts sets fills DRS Host groups and DRS VM groups for all existing cluster in a stretched datacenter
-	and creates DRS Rules with soft VM-to-Host affinity based on the VM's used datastores.
-	The scripts needs to know the ESXi Hosts per site and datastores per site; see the VARS section below.
-	It also mails you a report if needed every runtime and tells you which VM's use datastores from both sites.
-	Only works with two sites!
+    .DESCRIPTION
+    Scripts sets fills DRS Host groups and DRS VM groups for all existing cluster in a stretched datacenter
+    and creates DRS Rules with soft VM-to-Host affinity based on the VM's used datastores.
+    The scripts needs to know the ESXi Hosts per site and datastores per site; see the VARS section below.
+    It also mails you a report if needed every runtime and tells you which VM's use datastores from both sites.
+    Only works with two sites!
     .NOTES
     By Jan Jaap van Santen
     github: janjaaps
-	email: github@lebber.net
+    email: github@lebber.net
     vMSC Info
     Good read: http://www.vmware.com/files/pdf/techpaper/vmware-vsphere-metro-storage-cluster-recommended-practices.pdf
     By Duncan Epping
@@ -191,54 +191,54 @@ A switch that will create the rule with Must Run on these host, if not set it wi
 Author: Niklas Akerlund / RTS (most of the code came from http://communities.vmware.com/message/1667279 @LucD22 and GotMoo)
 Date: 2012-06-28
 #>
-	param (
-	[Parameter(Position=0,Mandatory=$true,HelpMessage="A Cluster",
-	ValueFromPipeline=$True)]
-	$cluster,
-	$VMHosts,
-	$VMs,
-	[string]$Name,
-	[switch]$MustRun
-	)
-	
-	$cluster = Get-Cluster $cluster
+    param (
+    [Parameter(Position=0,Mandatory=$true,HelpMessage="A Cluster",
+    ValueFromPipeline=$True)]
+    $cluster,
+    $VMHosts,
+    $VMs,
+    [string]$Name,
+    [switch]$MustRun
+    )
+    
+    $cluster = Get-Cluster $cluster
 
-	$spec = New-Object VMware.Vim.ClusterConfigSpecEx
-	$groupVM = New-Object VMware.Vim.ClusterGroupSpec 
-	$groupVM.operation = "add" 
-	$groupVM.Info = New-Object VMware.Vim.ClusterVmGroup
-	$groupVM.Info.Name = "VM$Name"
+    $spec = New-Object VMware.Vim.ClusterConfigSpecEx
+    $groupVM = New-Object VMware.Vim.ClusterGroupSpec 
+    $groupVM.operation = "add" 
+    $groupVM.Info = New-Object VMware.Vim.ClusterVmGroup
+    $groupVM.Info.Name = "VM$Name"
 
-	Get-VM $VMs | %{
-	$groupVM.Info.VM += $_.Extensiondata.MoRef
-	}
-	$spec.GroupSpec += $groupVM
+    Get-VM $VMs | %{
+    $groupVM.Info.VM += $_.Extensiondata.MoRef
+    }
+    $spec.GroupSpec += $groupVM
 
-	$groupESX = New-Object VMware.Vim.ClusterGroupSpec 
-	$groupESX.operation = "add"
-	$groupESX.Info = New-Object VMware.Vim.ClusterHostGroup
-	$groupESX.Info.Name = "Host$Name"
+    $groupESX = New-Object VMware.Vim.ClusterGroupSpec 
+    $groupESX.operation = "add"
+    $groupESX.Info = New-Object VMware.Vim.ClusterHostGroup
+    $groupESX.Info.Name = "Host$Name"
 
-	Get-VMHost $VMHosts | %{
-	$groupESX.Info.Host += $_.Extensiondata.MoRef
-	}
-	$spec.GroupSpec += $groupESX
+    Get-VMHost $VMHosts | %{
+    $groupESX.Info.Host += $_.Extensiondata.MoRef
+    }
+    $spec.GroupSpec += $groupESX
 
-	$rule = New-Object VMware.Vim.ClusterRuleSpec
-	$rule.operation = "add"
-	$rule.info = New-Object VMware.Vim.ClusterVmHostRuleInfo
-	$rule.info.enabled = $true
-	$rule.info.name = $Name
-	if($MustRun){
-		$rule.info.mandatory = $true
-	}else{
-		$rule.info.mandatory = $false
-	}
-	$rule.info.vmGroupName = "VM$Name"
-	$rule.info.affineHostGroupName = "Host$Name"
-	$spec.RulesSpec += $rule
+    $rule = New-Object VMware.Vim.ClusterRuleSpec
+    $rule.operation = "add"
+    $rule.info = New-Object VMware.Vim.ClusterVmHostRuleInfo
+    $rule.info.enabled = $true
+    $rule.info.name = $Name
+    if($MustRun){
+        $rule.info.mandatory = $true
+    }else{
+        $rule.info.mandatory = $false
+    }
+    $rule.info.vmGroupName = "VM$Name"
+    $rule.info.affineHostGroupName = "Host$Name"
+    $spec.RulesSpec += $rule
 
-	$cluster.ExtensionData.ReconfigureComputeResource($spec,$true)
+    $cluster.ExtensionData.ReconfigureComputeResource($spec,$true)
 }
 
 function Update-DrsVMGroup {
@@ -255,11 +255,11 @@ Use this function to update the ClusterVMgroup with VMs that are sent in by para
 Author: Niklas Akerlund / RTS (most of the code came from http://communities.vmware.com/message/1667279 @LucD22 and GotMoo)
 Date: 2012-06-28
 #>
-	param (
-	$cluster,
-	$VMs,
-	$groupVMName)
-	
+    param (
+    $cluster,
+    $VMs,
+    $groupVMName)
+    
     $cluster = Get-Cluster $cluster
     $spec = New-Object VMware.Vim.ClusterConfigSpecEx
     $groupVM = New-Object VMware.Vim.ClusterGroupSpec 
