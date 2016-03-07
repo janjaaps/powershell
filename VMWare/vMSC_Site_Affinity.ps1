@@ -46,7 +46,7 @@ Clear-Content $logfile
 function Update-DrsVMGroup {
 <#
 .SYNOPSIS
-Update DRS VM group with a new collection of VM´s
+Update DRS VM group with a new collection of VMÂ´s
 
 .DESCRIPTION
 Use this function to update the ClusterVMgroup with VMs that are sent in by parameters
