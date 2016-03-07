@@ -1,6 +1,7 @@
 <#  
     .SYNOPSIS
     Sets VM-to-Host soft affinity (should not must) in a vMSC scenario where site affinity is preferred.
+	vMSC Site Affinity
     .DESCRIPTION
     Scripts sets fills DRS Host groups and DRS VM groups for all existing cluster in a stretched datacenter
     and creates DRS Rules with soft VM-to-Host affinity based on the VM's used datastores.
@@ -11,17 +12,20 @@
     By Jan Jaap van Santen
     github: janjaaps
     email: github@lebber.net
+    email: janjaap@scict.nl
     vMSC Info
     Good read: http://www.vmware.com/files/pdf/techpaper/vmware-vsphere-metro-storage-cluster-recommended-practices.pdf
     By Duncan Epping
     .LINK
     https://github.com/janjaaps/powershell
+    http://scict.nl/
     .EXAMPLE
-    none yet, just fill the VARS and run, PowerCLI needed
+    Just fill the VARS and run, PowerCLI needed
+    Run by using task schedular "powershell -file "vMSC Site Affinity.ps1" "
 #>
 
 ### VARS DONT TOUCH
-$version = "v0.2"
+$version = "v0.3"
 ### VARS
 $reportemailserver = 'mailserver.local' 
 $reportemailsubject = 'vMSC Site Affinity'
@@ -36,7 +40,45 @@ $siteA_hosts = 'algpvmesx01.local','algpvmesx03.local','algpvmesx05.local','algp
 $siteB_hosts = 'algpvmesx02.local','algpvmesx04.local','algpvmesx06.local','algpvmesx08.local','algpvmora42.local' # comma seperated esxi hosts
 $doReport = $True # Option to report/mail
 $logfile = "c:\test.log"
+$RunDRS = "1" # 0 for no, 1 for yes to run DRS immediately afterwards
 Clear-Content $logfile
+
+function Update-DrsVMGroup {
+<#
+.SYNOPSIS
+Update DRS VM group with a new collection of VM´s
+
+.DESCRIPTION
+Use this function to update the ClusterVMgroup with VMs that are sent in by parameters
+
+.PARAMETER  xyz 
+
+.NOTES
+Author: Niklas Akerlund / RTS (most of the code came from http://communities.vmware.com/message/1667279 @LucD22 and GotMoo)
+Date: 2012-06-28
+#>
+    param (
+    $cluster,
+    $VMs,
+    $groupVMName)
+    
+    $cluster = Get-Cluster $cluster
+    $spec = New-Object VMware.Vim.ClusterConfigSpecEx
+    $groupVM = New-Object VMware.Vim.ClusterGroupSpec 
+    #Operation edit will replace the contents of the GroupVMName with the new contents seleced below.
+    $groupVM.operation = "edit" 
+
+    $groupVM.Info = New-Object VMware.Vim.ClusterVmGroup
+    $groupVM.Info.Name = $groupVMName 
+
+    Get-VM $VMs | %{
+        $groupVM.Info.VM += $_.Extensiondata.MoRef
+    }
+    $spec.GroupSpec += $groupVM
+
+    #Apply the settings to the cluster
+    $cluster.ExtensionData.ReconfigureComputeResource($spec,$true)
+}
 
 ##### MAILER
 Function Mailer
@@ -241,42 +283,16 @@ Date: 2012-06-28
     $cluster.ExtensionData.ReconfigureComputeResource($spec,$true)
 }
 
-function Update-DrsVMGroup {
-<#
-.SYNOPSIS
-Update DRS VM group with a new collection of VM´s
 
-.DESCRIPTION
-Use this function to update the ClusterVMgroup with VMs that are sent in by parameters
 
-.PARAMETER  xyz 
-
-.NOTES
-Author: Niklas Akerlund / RTS (most of the code came from http://communities.vmware.com/message/1667279 @LucD22 and GotMoo)
-Date: 2012-06-28
-#>
-    param (
-    $cluster,
-    $VMs,
-    $groupVMName)
-    
-    $cluster = Get-Cluster $cluster
-    $spec = New-Object VMware.Vim.ClusterConfigSpecEx
-    $groupVM = New-Object VMware.Vim.ClusterGroupSpec 
-    #Operation edit will replace the contents of the GroupVMName with the new contents seleced below.
-    $groupVM.operation = "edit" 
-
-    $groupVM.Info = New-Object VMware.Vim.ClusterVmGroup
-    $groupVM.Info.Name = $groupVMName 
-
-    Get-VM $VMs | %{
-        $groupVM.Info.VM += $_.Extensiondata.MoRef
-    }
-    $spec.GroupSpec += $groupVM
-
-    #Apply the settings to the cluster
-    $cluster.ExtensionData.ReconfigureComputeResource($spec,$true)
+if ($RunDRS) { 
+WriteLogScreen "------------------------------------------------------------------------------------------" 
+WriteLogScreen "Running DRS Recommendations"
+Get-DrsRecommendation -Refresh| Invoke-DrsRecommendation
+WriteLogScreen "------------------------------------------------------------------------------------------" 
 }
 
-
 if ($doreport) { mailer } 
+
+
+Disconnect-VIServer $vcenterserver -Confirm:$False;
