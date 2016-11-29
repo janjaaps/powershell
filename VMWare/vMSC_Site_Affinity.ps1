@@ -1,7 +1,7 @@
 <#  
     .SYNOPSIS
     Sets VM-to-Host soft affinity (should not must) in a vMSC scenario where site affinity is preferred.
-    vMSC Site Affinity
+	vMSC Site Affinity
     .DESCRIPTION
     Scripts sets fills DRS Host groups and DRS VM groups for all existing cluster in a stretched datacenter
     and creates DRS Rules with soft VM-to-Host affinity based on the VM's used datastores.
