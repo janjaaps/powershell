@@ -14,6 +14,8 @@
     - support for defining clusters (instead of all)
     - extra output in log and mail of VM's running cross, for example a VM with storage on site A en running on a host in site B.
     - fix for environments with multiple VMHostAffinity rules (outside this script)
+	v0.5
+	- RunDRS fix
     .NOTES
     By Jan Jaap van Santen
     github: janjaaps
@@ -31,7 +33,7 @@
 #>
  
 ### VARS DONT TOUCH
-$version = "v0.4"
+$version = "v0.5"
 ### VARS
 $reportemailserver = 'mailserver.local' 
 $reportemailsubject = 'vMSC Site Affinity'
@@ -48,7 +50,7 @@ $siteB_hosts = 'esx02.local','esx04.local','esx06.local','esx08.local','ora42.lo
 $siteX_clusters = '*' # comma separated esxi hosts, or use wildcards *PROD[0-9]*
 $doReport = $True # Option to report/mail
 $logfile = "c:\test.log"
-$RunDRS = "1" # 0 for no, 1 for yes to run DRS immediately afterwards
+$RunDRS = $True # Option to run DRS immediately afterwards
 Clear-Content $logfile
  
 function Update-DrsVMGroup {
