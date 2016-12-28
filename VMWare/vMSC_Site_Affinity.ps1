@@ -52,7 +52,9 @@ $doReport = $True # Option to report/mail
 $logfile = "c:\test.log"
 $RunDRS = $True # Option to run DRS immediately afterwards
 Clear-Content $logfile
- 
+
+
+###http://vniklas.djungeln.se/2012/06/28/vsphere-cluster-host-vm-rule-affinity-with-powercli/
 function Update-DrsVMGroup {
 <#
 .SYNOPSIS
@@ -89,6 +91,74 @@ Date: 2012-06-28
     #Apply the settings to the cluster
     $cluster.ExtensionData.ReconfigureComputeResource($spec,$true)
 }
+
+
+###http://vniklas.djungeln.se/2012/06/28/vsphere-cluster-host-vm-rule-affinity-with-powercli/
+function New-DRSGroupRule{
+<#
+.SYNOPSIS
+Create a new DRSGroupRule for VMs to reside on some hosts in a cluster
+ 
+.DESCRIPTION
+Use this function to create vms in a group and hosts in a group and a host-vm affinity
+ 
+.PARAMETER  MustRun
+A switch that will create the rule with Must Run on these host, if not set it will create the rule with should run.
+ 
+.NOTES
+Author: Niklas Akerlund / RTS (most of the code came from http://communities.vmware.com/message/1667279 @LucD22 and GotMoo)
+Date: 2012-06-28
+#>
+    param (
+    [Parameter(Position=0,Mandatory=$true,HelpMessage="A Cluster",
+    ValueFromPipeline=$True)]
+    $cluster,
+    $VMHosts,
+    $VMs,
+    [string]$Name,
+    [switch]$MustRun
+    )
+    
+    $cluster = Get-Cluster $cluster
+ 
+    $spec = New-Object VMware.Vim.ClusterConfigSpecEx
+    $groupVM = New-Object VMware.Vim.ClusterGroupSpec
+    $groupVM.operation = "add" 
+    $groupVM.Info = New-Object VMware.Vim.ClusterVmGroup
+    $groupVM.Info.Name = "VM$Name"
+ 
+    Get-VM $VMs | %{
+   $groupVM.Info.VM += $_.Extensiondata.MoRef
+    }
+    $spec.GroupSpec += $groupVM
+ 
+    $groupESX = New-Object VMware.Vim.ClusterGroupSpec
+    $groupESX.operation = "add"
+    $groupESX.Info = New-Object VMware.Vim.ClusterHostGroup
+    $groupESX.Info.Name = "Host$Name"
+ 
+    Get-VMHost $VMHosts | %{
+    $groupESX.Info.Host += $_.Extensiondata.MoRef
+    }
+    $spec.GroupSpec += $groupESX
+ 
+    $rule = New-Object VMware.Vim.ClusterRuleSpec
+    $rule.operation = "add"
+    $rule.info = New-Object VMware.Vim.ClusterVmHostRuleInfo
+    $rule.info.enabled = $true
+    $rule.info.name = $Name
+    if($MustRun){
+        $rule.info.mandatory = $true
+    }else{
+        $rule.info.mandatory = $false
+    }
+    $rule.info.vmGroupName = "VM$Name"
+    $rule.info.affineHostGroupName = "Host$Name"
+    $spec.RulesSpec += $rule
+ 
+    $cluster.ExtensionData.ReconfigureComputeResource($spec,$true)
+}
+
  
 ##### MAILER
 Function Mailer
@@ -260,75 +330,7 @@ WriteLogScreen "----------------------------------------------------------------
 WriteLogScreen "VM's Double Site Storage"
 WriteLogScreen "------------------------------------------------------------------------------------------"
 foreach ($i in $vmsC) { WriteLogScreen "- $i" }
- 
- 
-###http://vniklas.djungeln.se/2012/06/28/vsphere-cluster-host-vm-rule-affinity-with-powercli/
-function New-DRSGroupRule{
-<#
-.SYNOPSIS
-Create a new DRSGroupRule for VMs to reside on some hosts in a cluster
- 
-.DESCRIPTION
-Use this function to create vms in a group and hosts in a group and a host-vm affinity
- 
-.PARAMETER  MustRun
-A switch that will create the rule with Must Run on these host, if not set it will create the rule with should run.
- 
-.NOTES
-Author: Niklas Akerlund / RTS (most of the code came from http://communities.vmware.com/message/1667279 @LucD22 and GotMoo)
-Date: 2012-06-28
-#>
-    param (
-    [Parameter(Position=0,Mandatory=$true,HelpMessage="A Cluster",
-    ValueFromPipeline=$True)]
-    $cluster,
-    $VMHosts,
-    $VMs,
-    [string]$Name,
-    [switch]$MustRun
-    )
-    
-    $cluster = Get-Cluster $cluster
- 
-    $spec = New-Object VMware.Vim.ClusterConfigSpecEx
-    $groupVM = New-Object VMware.Vim.ClusterGroupSpec
-    $groupVM.operation = "add" 
-    $groupVM.Info = New-Object VMware.Vim.ClusterVmGroup
-    $groupVM.Info.Name = "VM$Name"
- 
-    Get-VM $VMs | %{
-   $groupVM.Info.VM += $_.Extensiondata.MoRef
-    }
-    $spec.GroupSpec += $groupVM
- 
-    $groupESX = New-Object VMware.Vim.ClusterGroupSpec
-    $groupESX.operation = "add"
-    $groupESX.Info = New-Object VMware.Vim.ClusterHostGroup
-    $groupESX.Info.Name = "Host$Name"
- 
-    Get-VMHost $VMHosts | %{
-    $groupESX.Info.Host += $_.Extensiondata.MoRef
-    }
-    $spec.GroupSpec += $groupESX
- 
-    $rule = New-Object VMware.Vim.ClusterRuleSpec
-    $rule.operation = "add"
-    $rule.info = New-Object VMware.Vim.ClusterVmHostRuleInfo
-    $rule.info.enabled = $true
-    $rule.info.name = $Name
-    if($MustRun){
-        $rule.info.mandatory = $true
-    }else{
-        $rule.info.mandatory = $false
-    }
-    $rule.info.vmGroupName = "VM$Name"
-    $rule.info.affineHostGroupName = "Host$Name"
-    $spec.RulesSpec += $rule
- 
-    $cluster.ExtensionData.ReconfigureComputeResource($spec,$true)
-}
- 
- 
+  
  
 if ($RunDRS) { 
 WriteLogScreen "------------------------------------------------------------------------------------------"
