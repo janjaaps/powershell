@@ -42,7 +42,7 @@
 
 
 ### VARS DONT TOUCH
-$version = "v1.0"
+$version = "v1.1"
 ### VARS
 
 # Variables that can be defined as defaults
@@ -561,18 +561,19 @@ foreach ($pg in $array_destPG) {
 }
 $FTarray_destPG | format-table 
 #$FTarray_selected_destPG = @()
-foreach ($vm in $FTstring_selected_sourceVMs.split(" ")) {
+foreach ($vm in $FTarray_selected_sourceVMs) {
+    $vm = $vm.SourceVM
     $nic = ""
     $vm_nics = $()
     $FTarray_nics = get-networkadapter $vm
     foreach ($nic in $FTarray_nics) { $vm_nics += "[" + $($nic.networkname) + "]" + " " }
-    WriteLogScreen "`n$($FTstring_selected_sourceVMs.split(" ").indexof($vm)). For $VM with networks: $($vm_nics.trim())"
+    WriteLogScreen "`n$($FTarray_selected_sourceVMs.SourceVM.indexof($vm)). For $VM with networks: $($vm_nics.trim())"
     $nic_count = $FTarray_nics.count
     if ($nic_count -eq 0) { 
         WriteLogScreen "`nWarning: no network found on this VM"
         $string_destPG = "EMPTY"
     } elseif ($nic_count -eq 1) { 
-        $string_destPG = read-host -Prompt "$($FTstring_selected_sourceVMs.split(" ").indexof($vm)). Enter the destination network idx number, single entry only [$vmnetworkname]"
+        $string_destPG = read-host -Prompt "$($FTarray_selected_sourceVMs.SourceVM.indexof($vm)). Enter the destination network idx number, single entry only [$vmnetworkname]"
         if ([string]::IsNullOrWhiteSpace($string_destPG)) { 
             $string_destPG = $vmnetworkname 
         } elseif ( ($string_destPG -notcontains " ") -and ($FTarray_destPG[$string_destPG].Name) ) {
@@ -581,7 +582,7 @@ foreach ($vm in $FTstring_selected_sourceVMs.split(" ")) {
             WriteLogScreen "`nERROR: Incorrect portgroup(s) selected... Exiting..." ; $empty = Read-Host -Prompt 'Press enter to exit' ; exit
         }
     } else {
-        $string_destPG = read-host -Prompt "$($FTstring_selected_sourceVMs.split(" ").indexof($vm)). Enter the destination network idx number, use space as seperator for these $nic_count entries, in the correct order"
+        $string_destPG = read-host -Prompt "$($FTarray_selected_sourceVMs.SourceVM.indexof($vm)). Enter the destination network idx number, use space as seperator for these $nic_count entries, in the correct order"
         $exist_destPG = $true
         foreach ($pg in $string_destPG.split(" ")) { if (!($FTarray_destPG.Idx.Contains("$($pg)."))) { $exist_destPG = $false } }
         if (!($string_destPG.split(" ").count -eq $nic_count)) { $exist_destPG = $false }
