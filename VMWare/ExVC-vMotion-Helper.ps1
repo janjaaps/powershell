@@ -107,7 +107,7 @@ param(
 )
 
 ### VARS DONT TOUCH
-$version = "v2.2"
+$version = "v2.3"
 ### VARS
 
 # Variables that can be defined as defaults
@@ -128,7 +128,6 @@ $destvmnetworkname4 = "LA-VM-Network4"
 $destswitchname = "LA-VDS"
 #$destswitchtype = "vds" (autodetect)
 
-$Confirm = $False
 $doReport = $True # Option to report/mail
 $logfile = "ExVC-vMotion-Helper.log"
 if ($doReport) { 
@@ -693,7 +692,7 @@ foreach ($selected_vm in $FTarray_selected_sourceVMs) {
 
 ##### Final check question
 
-if ($confirm -eq $false) {
+if ($confirm -ne $true) {
     write-host "`n"
     $final_check = read-host -Prompt "Are these correct? Start the (E)xVC-vMotions? [Y/N]"
     if ( $final_check -ieq "Y" ) { 
@@ -701,10 +700,7 @@ if ($confirm -eq $false) {
     } else {
         WriteLogScreen "`nERROR: Stopped... Exiting..." ; $empty = Read-Host -Prompt 'Press enter to exit' ; exit
     }
-} elseif ($confirm -eq $true) {
-    # do nothing
-}
-
+} 
 
 ##### (E)xVC-vMotion parallel start
 foreach ($selected_vm in $FTarray_selected_sourceVMs) {
@@ -732,8 +728,7 @@ foreach ($selected_vm in $FTarray_selected_sourceVMs) {
 #     -destVCusername $destVCusername `
 #     -destVCpassword $UnsecurePassword `
 #     -switchtype $selected_vm.DestSwitchType ` 
-#     -resourcepool $selected_vm.DestPool `
-#     -datastore $selected_vm.DestDatastore ` 
+#     -resourcepool $selected_vm.DestPool `#     -datastore $selected_vm.DestDatastore ` 
 #     -vmhost $selected_vm.DestHost `
 #     -xvctype $selected_vm.ComputeXVCOnly `
 #     -vmnetworks $selected_vm.DestNetwork `
