@@ -107,7 +107,7 @@ param(
 )
 
 ### VARS DONT TOUCH
-$version = "v2.1"
+$version = "v2.2"
 ### VARS
 
 # Variables that can be defined as defaults
@@ -541,7 +541,8 @@ foreach ($pg in $array_sourcePG) {
 $array_destPG_vSwitch = get-virtualportgroup -standard -Server $($global:DefaultVIServers[0].name) -VMHost $FTstring_selected_destHost | sort virtualswitch, name
 $array_destPG_dvSwitch = get-virtualportgroup -distributed -Server $($global:DefaultVIServers[0].name) -VMHost $FTstring_selected_destHost | sort virtualswitch, name
 $array_destPG_dvSwitch = $array_destPG_dvSwitch | where-object { !(get-virtualswitch -name $_.VirtualSwitch).ExtensionData.config.Uplinkportgroup.value.contains($_.key) }
-$array_destPG = $array_destPG_vSwitch + $array_destPG_dvSwitch | sort virtualswitch, name
+$array_destPG = [array]$array_destPG_vSwitch + $array_destPG_dvSwitch
+$array_destPG = $array_destPG | sort virtualswitch, name
 $FTarray_destPG = @()
 foreach ($pg in $array_destPG) {
     if ($pg.Extensiondata.Config.DefaultPortCOnfig.Vlan.VlanId) {
@@ -700,7 +701,7 @@ if ($confirm -eq $false) {
     } else {
         WriteLogScreen "`nERROR: Stopped... Exiting..." ; $empty = Read-Host -Prompt 'Press enter to exit' ; exit
     }
-} elsif ($confirm -eq $true) {
+} elseif ($confirm -eq $true) {
     # do nothing
 }
 
@@ -712,7 +713,6 @@ foreach ($selected_vm in $FTarray_selected_sourceVMs) {
     #$UnsecurePassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
 
     $destportgroups = @()
-    $($selected_vm.DestNetwork)
     foreach ($destportgroup in $($selected_vm.DestNetwork).split(" ")) {
       $destportgroups += Get-VDPortgroup -Name $destportgroup -Server $destVC
     }
@@ -731,8 +731,9 @@ foreach ($selected_vm in $FTarray_selected_sourceVMs) {
 #     -destvc $destVC `
 #     -destVCusername $destVCusername `
 #     -destVCpassword $UnsecurePassword `
-#     -switchtype $selected_vm.DestSwitchType `
-#     -resourcepool $selected_vm.DestPool `#     -datastore $selected_vm.DestDatastore `
+#     -switchtype $selected_vm.DestSwitchType ` 
+#     -resourcepool $selected_vm.DestPool `
+#     -datastore $selected_vm.DestDatastore ` 
 #     -vmhost $selected_vm.DestHost `
 #     -xvctype $selected_vm.ComputeXVCOnly `
 #     -vmnetworks $selected_vm.DestNetwork `
