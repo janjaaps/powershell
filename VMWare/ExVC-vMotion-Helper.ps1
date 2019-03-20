@@ -44,10 +44,13 @@
    https://www.virtuallyghetto.com/2018/09/vmotion-across-different-vds-version-between-onprem-and-vmc.html
 .LINK
    https://github.com/lamw
-
 .INPUTS
-   sourceVCConnection, destVCConnection, vm, switchtype, switch,
-   cluster, resourcepool, datastore, vmhost, vmnetworks, $xvctype, $uppercaseuuid
+   PsourceVM, PsourceVC, PsourceVCUsername, PsourceVCPassword, PdestVC, PdestVCUsername, PdestVCpassword,
+   Pdestdatastorename, Pdestresourcepool, Pdestvmhostname, Pdestswitchname, Pnetworkautodetect, Confirm
+
+   Not yet implemented:
+   Pdestvmnetworkname1, Pdestvmnetworkname2, Pdestvmnetworkname3, Pdestvmnetworkname4, Pdestvmnetworkname5, 
+   Pdestvmnetworkname6, Pdestvmnetworkname7, Pdestvmnetworkname8, Pdestvmnetworkname9, Pdestvmnetworkname10
 .OUTPUTS
    Console output
 #>
@@ -97,12 +100,14 @@ param(
   [Parameter(Mandatory=$false)]
   [string] $Pdestswitchname,
   [Parameter(Mandatory=$false)]
-  [switch] $Pnetworkautodetect
+  [switch] $Pnetworkautodetect,
+  [Parameter(Mandatory=$false)]
+  [boolean] $Confirm
 
 )
 
 ### VARS DONT TOUCH
-$version = "v2.0"
+$version = "v2.1"
 ### VARS
 
 # Variables that can be defined as defaults
@@ -123,8 +128,9 @@ $destvmnetworkname4 = "LA-VM-Network4"
 $destswitchname = "LA-VDS"
 #$destswitchtype = "vds" (autodetect)
 
+$Confirm = $False
 $doReport = $True # Option to report/mail
-$logfile = "U:\Powershell (E)xVC-vMotion Helper\ExVC-vMotion-Helper.log"
+$logfile = "ExVC-vMotion-Helper.log"
 if ($doReport) { 
     if ([System.IO.File]::Exists($logfile)) { Clear-Content $logfile }
 }
@@ -684,12 +690,17 @@ foreach ($selected_vm in $FTarray_selected_sourceVMs) {
 }
 
 ##### Final check question
-write-host "`n"
-$final_check = read-host -Prompt "Are these correct? Start the (E)xVC-vMotions? [Y/N]"
-if ( $final_check -ieq "Y" ) { 
-    # do nothing, continue
-} else {
-    WriteLogScreen "`nERROR: Stopped... Exiting..." ; $empty = Read-Host -Prompt 'Press enter to exit' ; exit
+
+if ($confirm -eq $false) {
+    write-host "`n"
+    $final_check = read-host -Prompt "Are these correct? Start the (E)xVC-vMotions? [Y/N]"
+    if ( $final_check -ieq "Y" ) { 
+        # do nothing, continue
+    } else {
+        WriteLogScreen "`nERROR: Stopped... Exiting..." ; $empty = Read-Host -Prompt 'Press enter to exit' ; exit
+    }
+} elsif ($confirm -eq $true) {
+    # do nothing
 }
 
 
@@ -720,8 +731,7 @@ foreach ($selected_vm in $FTarray_selected_sourceVMs) {
 #     -destVCusername $destVCusername `
 #     -destVCpassword $UnsecurePassword `
 #     -switchtype $selected_vm.DestSwitchType `
-#     -resourcepool $selected_vm.DestPool `
-#     -datastore $selected_vm.DestDatastore `
+#     -resourcepool $selected_vm.DestPool `#     -datastore $selected_vm.DestDatastore `
 #     -vmhost $selected_vm.DestHost `
 #     -xvctype $selected_vm.ComputeXVCOnly `
 #     -vmnetworks $selected_vm.DestNetwork `
