@@ -518,7 +518,8 @@ $FTstring_selected_sourceHost = get-vmhost -Server $($global:DefaultVIServers[1]
 $array_sourcePG_vSwitch = get-virtualportgroup -standard -Server $($global:DefaultVIServers[1].name) -VMHost $FTstring_selected_sourceHost | sort virtualswitch, name
 $array_sourcePG_dvSwitch = get-virtualportgroup -distributed -Server $($global:DefaultVIServers[1].name) -VMHost $FTstring_selected_sourceHost | sort virtualswitch, name
 $array_sourcePG_dvSwitch = $array_sourcePG_dvSwitch | where-object { !(get-virtualswitch -name $_.VirtualSwitch).ExtensionData.config.Uplinkportgroup.value.contains($_.key) }
-$array_sourcePG = $array_sourcePG_vSwitch + $array_sourcePG_dvSwitch | sort virtualswitch, name
+$array_sourcePG = [array]$array_sourcePG_vSwitch + $array_sourcePG_dvSwitch
+$array_sourcePG = $array_sourcePG | sort virtualswitch, name
 $FTarray_sourcePG = @()
 foreach ($pg in $array_sourcePG) {
     if ($pg.Extensiondata.Config.DefaultPortCOnfig.Vlan.VlanId) {
