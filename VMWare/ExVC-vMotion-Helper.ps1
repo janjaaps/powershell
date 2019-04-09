@@ -107,7 +107,7 @@ param(
 )
 
 ### VARS DONT TOUCH
-$version = "v2.3"
+$version = "v2.4"
 ### VARS
 
 # Variables that can be defined as defaults
@@ -516,7 +516,7 @@ WriteLogScreen "`nStep 7. Select destination network for selected VM's [$($FTstr
 $FTstring_selected_sourceHost = get-vmhost -Server $($global:DefaultVIServers[1].name) -VM $($FTstring_selected_sourceVMs)
 $array_sourcePG_vSwitch = get-virtualportgroup -standard -Server $($global:DefaultVIServers[1].name) -VMHost $FTstring_selected_sourceHost | sort virtualswitch, name
 $array_sourcePG_dvSwitch = get-virtualportgroup -distributed -Server $($global:DefaultVIServers[1].name) -VMHost $FTstring_selected_sourceHost | sort virtualswitch, name
-$array_sourcePG_dvSwitch = $array_sourcePG_dvSwitch | where-object { !(get-virtualswitch -name $_.VirtualSwitch).ExtensionData.config.Uplinkportgroup.value.contains($_.key) }
+$array_sourcePG_dvSwitch = $array_sourcePG_dvSwitch | where-object { !(get-virtualswitch -VMHost $FTstring_selected_sourceHost -name $_.VirtualSwitch).ExtensionData.config.Uplinkportgroup.value.contains($_.key) }
 $array_sourcePG = [array]$array_sourcePG_vSwitch + $array_sourcePG_dvSwitch
 $array_sourcePG = $array_sourcePG | sort virtualswitch, name
 $FTarray_sourcePG = @()
@@ -539,7 +539,7 @@ foreach ($pg in $array_sourcePG) {
 #Dest PG Array
 $array_destPG_vSwitch = get-virtualportgroup -standard -Server $($global:DefaultVIServers[0].name) -VMHost $FTstring_selected_destHost | sort virtualswitch, name
 $array_destPG_dvSwitch = get-virtualportgroup -distributed -Server $($global:DefaultVIServers[0].name) -VMHost $FTstring_selected_destHost | sort virtualswitch, name
-$array_destPG_dvSwitch = $array_destPG_dvSwitch | where-object { !(get-virtualswitch -name $_.VirtualSwitch).ExtensionData.config.Uplinkportgroup.value.contains($_.key) }
+$array_destPG_dvSwitch = $array_destPG_dvSwitch | where-object { !(get-virtualswitch -VMHost $FTstring_selected_destHost -name $_.VirtualSwitch).ExtensionData.config.Uplinkportgroup.value.contains($_.key) }
 $array_destPG = [array]$array_destPG_vSwitch + $array_destPG_dvSwitch
 $array_destPG = $array_destPG | sort virtualswitch, name
 $FTarray_destPG = @()
