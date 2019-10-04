@@ -109,6 +109,7 @@ ForEach ($VM in $SortedVMs){
     $VMEsxiVersion = (get-vm $vm.name | get-vmhost).version
     $toolsStatus = $VM.Guest.ToolsStatus
     if($toolsStatus -eq "toolsOk"){ $VMtools = $true }
+    if($toolsStatus -eq "toolsOld"){ $VMtools = $true }
     
     #Check all thin disks
     if ( (get-vm $vm.name | get-harddisk | where {$_.Storageformat -inotmatch "Thin"}).length -eq 0) { $DisksAllThin = $true }
