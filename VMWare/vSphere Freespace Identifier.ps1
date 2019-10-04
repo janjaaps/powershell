@@ -6,6 +6,7 @@
    B. Check if automatic of manual UNMAP is activated or possible on the particular Virtual Machine.
 
    It outputs a powershell Grid and has the option to export to a CSV file.
+   Includes vSAN support
 .NOTES
    ================================
    name     : vSphere Freespace  and UNMAP Identifier
@@ -39,7 +40,7 @@ param(
 )
 
 ### VARS DONT TOUCH
-$version = "v0.7"
+$version = "v0.9"
 ### VARS
 
 
@@ -126,13 +127,20 @@ ForEach ($VM in $SortedVMs){
     #VM Datastore Type
     $VMDS = get-vm $vm.name | Get-Datastore | Select-Object -first 1
     $VMDSType = (get-vm $vm.name | Get-Datastore | Select-Object -first 1).Type
-    $VMDSVersion = (get-vm $vm.name | Get-Datastore | Select-Object -first 1).FileSystemVersion.substring(0,1)
+    if ($VMDSType -ne "vsan") { $VMDSVersion = (get-vm $vm.name | Get-Datastore | Select-Object -first 1).FileSystemVersion.substring(0,1) }
     $DSType = $VMDSType + "" + $VMDSVersion
     $HWVersion = $vm.Config.Version -replace "vmx-",""
     
     if ($VMDSType -eq "NFS") {
-        $DSmUNMAP = "NFS not applicable"
-        $DSaUNMAP = "NFS not applicable"
+        $DSmUNMAP = "NFS not supported"
+        $DSaUNMAP = "NFS not supported"
+    }
+
+    if ($VMDSType -eq "vsan") {
+        if ((Get-VsanClusterconfiguration -Cluster (get-cluster -VM $vm.name)| Select-Object guestTrimUnmap).guestTrimUnmap -eq $true) {
+            $DSmUNMAP = $true
+            $DSaUNMAP = $true
+        }
     }
     
     #Check if ESXi / Datastore UNMAP enabled / possible
@@ -176,7 +184,7 @@ ForEach ($VM in $SortedVMs){
                 if (($VMOS -imatch "Windows Server 2012") -or ($VMOS -imatch "Windows Server 2016") -or ($VMOS -imatch "Windows Server 2019") -or ($VMOS -imatch "Windows 8") -or ($VMOS -imatch "Windows 10")) { 
                     $VMmUNMAP = $true 
                     #Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\FileSystem" -Name DisableDeleteNotification
-                    $objReg = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('LocalMachine', "vwbwp106")
+                    $objReg = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('LocalMachine', $vm.name)
                     $objRegKey=$objReg.OpenSubKey("System\\CurrentControlSet\\Control\\FileSystem")
                     $VMDisableDeleteNotify = $objRegkey.GetValue("DisableDeleteNotification")
                     if ($VMDisableDeleteNotify -eq 0) {
@@ -213,7 +221,7 @@ ForEach ($VM in $SortedVMs){
     }
     
     if (($VMaUNMAP -eq $true) -and ($DSaUNMAP -eq $true)) { $EEaUNMAP = $true }
-    if (($VMaUNMAP -eq $true) -and ($VMDSType -eq "NFS")) { $EEaUNMAP = $true }
+    if (($VMaUNMAP -eq $true) -and ($VMDSType -eq "NFS")) { $EEaUNMAP = $false }
     #if ($VMmUNMAP -eq $true) { $VMmUNMAP = "If misaligned, you may need ESXi 6.5 Patch 1, ESXi650-201703001, build 5146846" }
     
     $Details | Add-Member -Name "End-to-End Auto UNMAP" -Value $EEaUNMAP -Membertype NoteProperty	
