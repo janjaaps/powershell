@@ -6,7 +6,7 @@
    B. Check if automatic of manual UNMAP is activated or possible on the particular Virtual Machine.
 
    It outputs a powershell Grid and has the option to export to a CSV file.
-   Includes vSAN support
+   Includes vSAN support - impropoved/corrected vSAN support
 .NOTES
    ================================
    name     : vSphere Freespace  and UNMAP Identifier
@@ -17,7 +17,7 @@
    blog     : https://scict.nl/
    ================================
 .LINK
-   https://scict.nl/ExVC-vMotion-Helper
+   https://scict.nl/vSphere-Freespace-Identifier
 .LINK
    https://github.com/janjaaps
 .INPUTS
@@ -33,14 +33,21 @@ param(
   [ValidateNotNullOrEmpty()]
   [string] $vCenter,
   [Parameter(Mandatory=$true)]
+  [ValidateNotNullOrEmpty()]
+  [string] $Cluster,
+  [Parameter(Mandatory=$true)]
   [AllowEmptyString()]
   [string] $VMparam,
   [Parameter(Mandatory=$false)]
-  [string] $ExportCSV
+  [string] $ExportCSV,
+  [Parameter(Mandatory=$false)]
+  [string] $ESXiHostUsername,
+  [Parameter(Mandatory=$false)]
+  [string] $ESXiHostPassword
 )
 
 ### VARS DONT TOUCH
-$version = "v0.9"
+$version = "v1.1"
 ### VARS
 
 
@@ -86,12 +93,142 @@ write-host "\-------------------------------------------------------------------
 
 Set-PowerCLIConfiguration -DisplayDeprecationWarnings $false -scope session -Confirm:$False | Out-Null
 Set-PowerCLIConfiguration -InvalidCertificateAction warn -scope session -Confirm:$False | Out-Null
-Connect-VIServer $vCenter
+Set-PowerCLIConfiguration -DefaultVIServerMode Multiple -Scope Session -Confirm:$false | Out-Null
+Disconnect-viserver * -Confirm:$False -Force | Out-Null
+$viserverConnection = Connect-VIServer $vCenter
 
 $MyCollection = @()	
 
-if ($VMparam.Length -lt 1 ) { $AllVMs = Get-View -ViewType VirtualMachine | Where {-not $_.Config.Template} }
-else { $AllVMs = Get-View -ViewType VirtualMachine | Where {-not $_.Config.Template} | Where {$_.Name -imatch $VMparam} }
+$ClusterFilter = get-view -ViewType ClusterComputeResource -Property Name -Filter @{"Name" = $Cluster } | select -ExpandProperty MoRef
+if ($VMparam.Length -lt 1 ) { $AllVMs = Get-View -ViewType VirtualMachine -SearchRoot $ClusterFilter | Where {-not $_.Config.Template} }
+else { $AllVMs = Get-View -ViewType VirtualMachine -SearchRoot $ClusterFilter | Where {-not $_.Config.Template} | Where {$_.Name -imatch $VMparam} }
+
+if ((get-cluster $cluster).vsanenabled -eq $true) { 
+
+    if($ESXiHostUsername -eq "" -or $ESXiHostPassword -eq "") {
+        Write-Host -ForegroundColor Red "You did not configure the ESXi host credentials, please update `$ESXiHostUsername & `$ESXiHostPassword variables and try again"
+        return
+    }
+
+    $ClustervSANEnabled = $true 
+
+    # Retrieve list of ESXi hosts from cluster
+    # which we will need to directly connect to use call VsanQueryObjectIdentities()
+    if ($VMparam) {
+        $vmhosts = get-vm $VMparam -Server $viserverConnection | get-vmhost
+    } else {
+        $vmhosts = get-cluster $cluster | get-vmhost 
+    }
+
+    # Retrieve vSAN data 
+    $vsanresults = @()
+    foreach ($vmhost in $vmhosts) {
+        $vmhostView = Get-vmhost $vmhost
+        $esxiConnection = Connect-VIServer -Server $vmhostView.name -User $ESXiHostUsername -Password $ESXiHostPassword
+
+        $vos = Get-VSANView -Id "VsanObjectSystem-vsan-object-system" -Server $esxiConnection
+        $identities = $vos.VsanQueryObjectIdentities($null,$null,$null,$false,$true,$true)
+        $json = $identities.RawData|ConvertFrom-Json
+        $jsonResults = $json.identities.vmIdentities
+
+        #one-time get vsan uuid's per vmhost
+        $vsanIntSys = Get-View -Server $esxiConnection (Get-VMHost -Server $esxiConnection).ExtensionData.ConfigManager.vsanInternalSystem
+      
+        #loop through all vsan jost results per host
+        foreach ($vmInstance in $jsonResults) {
+            $identities = $vmInstance.objIdentities #| where type -Match "vdisk"
+            foreach ($identity in $identities | Sort-Object -Property "type") {
+                # Retrieve the VM Name
+                if($identity.type -eq "namespace") {
+                    $attributes = ($vsanIntSys.GetVsanObjExtAttrs($identity.uuid)) | ConvertFrom-JSON
+
+                    foreach ($attribute in $attributes | Get-Member) {
+                        # crappy way to iterate through keys ...
+                        if($($attribute.Name) -ne "Equals" -and $($attribute.Name) -ne "GetHashCode" -and $($attribute.Name) -ne "GetType" -and $($attribute.Name) -ne "ToString") {
+                            $objectID = $attribute.name
+                            $vmName = $attributes.$($objectID).'User friendly name'
+                        }
+                    }
+                }
+
+                if (($VMparam) -and ($vmName -ne $VMparam)) {
+                } else {  
+                    # Convert B to MB
+                    $physicalUsedMB = $identity.physicalUsedB/1MB
+                    $RealUsedMB = $identity.primaryCapacityB/1MB
+                    $SecuredOptimizedUsedMB = ((get-vm -Server $esxiConnection $vmName).ExtensionData.LayoutEx.File | ? {$_.name -eq $identity.description }).Size/1MB
+                    $DedupCompressRatio = $physicalUsedMB / $SecuredOptimizedUsedMB
+                    $vSANSLAFootPrint = $physicalUsedMB / $RealUsedMB
+                }
+
+                # Build our custom object to store only the data we care about
+                    $tmp = [pscustomobject] @{
+                        VM = $vmName
+                        File = $identity.description;
+                        Type = $identity.type;
+                        physicalUsedMB = $physicalUsedMB;
+                        RealUsedMB = $RealUsedMB;
+                        SecuredOptimizedUsedMB = $SecuredOptimizedUsedMB;
+                        DedupCompressRatio = $DedupCompressRatio;
+                        vSANSLAFootPrint = $vSANSLAFootPrint;
+                    }
+
+                # Filter out a specific VM if provided
+                if($VMparam) {
+                    if($vmName -eq $VMparam) {
+                        if ($tmp.Type -eq "vdisk") {
+                            $vsanresults += $tmp
+                        }
+                    }
+                } else {
+                    if ($tmp.Type -eq "vdisk") {
+                        $vsanresults += $tmp
+                    }
+                }
+            }
+        }
+        Disconnect-VIServer -Server $esxiConnection -Confirm:$false
+    }
+    ###$vsanresults | Format-Table #gives per vmdk results filtered on vdisk type, maybe useful in the future
+}
+
+
+# rebuild vsanresults into array per VM and not per vmdk
+[System.Collections.ArrayList]$vsanvmresults = @()
+$tmp = [pscustomobject] @{
+    VM = ""
+    physicalUsedMB = ""
+    RealUsedMB = ""
+    SecuredOptimizedUsedMB = ""
+    DedupCompressRatio = ""
+    vSANSLAFootPrint = ""
+}
+$vsanvmresults += $tmp
+foreach ($vsanresult in $vsanresults) {
+    if ($vsanvmresults.VM.Contains($vsanresult.VM)) {
+        $vmindex = $vsanvmresults.VM.IndexOf($vsanresult.VM)
+        $vsanvmresults[$vmindex].physicalUsedMB += $vsanresult.physicalUsedMB
+        $vsanvmresults[$vmindex].RealUsedMB += $vsanresult.RealUsedMB
+        $vsanvmresults[$vmindex].SecuredOptimizedUsedMB += $vsanresult.SecuredOptimizedUsedMB
+        $vsanvmresults[$vmindex].DedupCompressRatio = $vsanvmresults[$vmindex].physicalUsedMB/$vsanvmresults[$vmindex].SecuredOptimizedUsedMB
+        $vsanvmresults[$vmindex].vSANSLAFootPrint = $vsanvmresults[$vmindex].physicalUsedMB/$vsanvmresults[$vmindex].RealUsedMB
+
+    } else {
+        $tmp = [pscustomobject] @{
+            VM = $vsanresult.VM
+            physicalUsedMB = $vsanresult.physicalUsedMB;
+            RealUsedMB = $vsanresult.RealUsedMB;
+            SecuredOptimizedUsedMB = $vsanresult.SecuredOptimizedUsedMB;
+            DedupCompressRatio = $vsanresult.DedupCompressRatio;
+            vSANSLAFootPrint = $vsanresult.vSANSLAFootPrint;
+        }
+        $vsanvmresults += $tmp
+    }   
+}
+$vsanvmresults.RemoveAt(0)
+
+
+
 
 $SortedVMs = $AllVMs | Select *, @{N="NumDisks";E={@($_.Guest.Disk.Length)}} | Sort-Object -Descending NumDisks	
 ForEach ($VM in $SortedVMs){
@@ -103,32 +240,33 @@ ForEach ($VM in $SortedVMs){
     $VMtools = $false
     $Snapshot = "VM has snapshot(s), delete these first before UNMAP/Zero"
     $Details = New-object PSObject	
-    $Details | Add-Member -Name Name -Value $VM.name -Membertype NoteProperty	
-    $DiskProvisionedVMDK = (get-vm $vm.name | Select ProvisionedSpaceGB).ProvisionedSpaceGB	
-    $DiskUsedSpaceVMDK = (get-vm $vm.name | Select UsedSpaceGB).UsedSpaceGB
-    $VMEsxiVersion = (get-vm $vm.name | get-vmhost).version
+    $Details | Add-Member -Name Name -Value $VM.name -Membertype NoteProperty
+    $getvm = get-vm $vm.name
+    $DiskProvisionedVMDK = ($getvm | Select ProvisionedSpaceGB).ProvisionedSpaceGB	
+    $DiskUsedSpaceVMDK = ($getvm | Select UsedSpaceGB).UsedSpaceGB
+    $VMEsxiVersion = ($getvm | get-vmhost).version
     $toolsStatus = $VM.Guest.ToolsStatus
     if($toolsStatus -eq "toolsOk"){ $VMtools = $true }
     if($toolsStatus -eq "toolsOld"){ $VMtools = $true }
     
     #Check all thin disks
-    if ( (get-vm $vm.name | get-harddisk | where {$_.Storageformat -inotmatch "Thin"}).length -eq 0) { $DisksAllThin = $true }
+    if ( ($getvm | get-harddisk | where {$_.Storageformat -inotmatch "Thin"}).length -eq 0) { $DisksAllThin = $true }
     else { $DisksAllThin = $false }
     
     #Check CBT on disks
     $CBTEnabled = $VM.Config.ChangeTrackingEnabled
     
     #GuestOS
-    $VMOS = (get-vm $vm.name).ExtensionData.Guest.GuestFullName
-    $VMOSFamily = (get-vm $vm.name).ExtensionData.Guest.GuestFamily
+    $VMOS = ($getvm).ExtensionData.Guest.GuestFullName
+    $VMOSFamily = ($getvm).ExtensionData.Guest.GuestFamily
     
     #Snapshots
-    if ((get-vm $vm.name |Get-Snapshot).count -eq 0) { $Snapshot = "No Snapshots" }
+    if (($getvm |Get-Snapshot).count -eq 0) { $Snapshot = "No Snapshots" }
     
     #VM Datastore Type
-    $VMDS = get-vm $vm.name | Get-Datastore | Select-Object -first 1
-    $VMDSType = (get-vm $vm.name | Get-Datastore | Select-Object -first 1).Type
-    if ($VMDSType -ne "vsan") { $VMDSVersion = (get-vm $vm.name | Get-Datastore | Select-Object -first 1).FileSystemVersion.substring(0,1) }
+    $VMDS = $getvm | Get-Datastore | Select-Object -first 1
+    $VMDSType = ($VMDS).Type
+    if ($VMDSType -ne "vsan") { $VMDSVersion = ($getvm | Get-Datastore | Select-Object -first 1).FileSystemVersion.substring(0,1) }
     $DSType = $VMDSType + "" + $VMDSVersion
     $HWVersion = $vm.Config.Version -replace "vmx-",""
     
@@ -163,7 +301,7 @@ ForEach ($VM in $SortedVMs){
                 if ($autounmap.Value -eq 1) { $DSaUNMAP = $true }
             }
             if ($VMDSVersion -eq 6) {
-                $esx = (get-vm $vm.name) | get-vmhost
+                $esx = ($getvm) | get-vmhost
                 $esxcli=get-esxcli -VMHost $esx -v2
                 $unmapargs = $esxcli.storage.vmfs.reclaim.config.get.createargs()
                 $unmapargs.volumelabel = $vmds.name
@@ -210,12 +348,23 @@ ForEach ($VM in $SortedVMs){
         $DiskFreeSpaceVM += $disk.FreeSpace
         $DiskNum++
     }
+
+    if ($ClustervSANEnabled -eq $true) {
+        $vmindex = $vsanvmresults.VM.IndexOf($VM.name)
+        $DiskUsedSpaceVMDK = ([math]::Round($vsanvmresults[$vmindex].RealUsedMB))
+    } else {
+        $DiskUsedSpaceVMDK = ([math]::Round($DiskUsedSpaceVMDK * 1024))
+    }
     $DiskProvisionedVMDK = ([math]::Round($DiskProvisionedVMDK * 1024))
-    $DiskUsedSpaceVMDK = ([math]::Round($DiskUsedSpaceVMDK * 1024))
     $DiskCapacityVM = ([math]::Round($DiskCapacityVM/ 1MB))
     $DiskFreeSpaceVM = ([math]::Round($DiskFreeSpaceVM/ 1MB))
     $DiskUsedSpaceVM = $DiskCapacityVM - $DiskFreeSpaceVM
-    if($VMtools -eq $true) {
+    #if($VMtools -eq $true) {
+    #    $DiskPotentialFreeSpace = $DiskUsedSpaceVMDK - ($DiskCapacityVM - $DiskFreeSpaceVM)
+    #} else {
+    #    $DiskPotentialFreeSpace = ([math]::Round(0/ 1MB))
+    #}
+    if ($DiskCapacityVM -gt 0) {
         $DiskPotentialFreeSpace = $DiskUsedSpaceVMDK - ($DiskCapacityVM - $DiskFreeSpaceVM)
     } else {
         $DiskPotentialFreeSpace = ([math]::Round(0/ 1MB))
@@ -243,6 +392,14 @@ ForEach ($VM in $SortedVMs){
     $Details | Add-Member -Name "OS" -Value $VMOS -Membertype NoteProperty
     $Details | Add-Member -Name "HWVersion" -Value $HWVersion -Membertype NoteProperty
     $Details | Add-Member -Name "Snapshots" -Value $Snapshot -Membertype NoteProperty
+    if ($ClustervSANEnabled -eq $true) {
+        $vmindex = $vsanvmresults.VM.IndexOf($VM.name)
+        $Details | Add-Member -Name "vSAN physicalUsedMB" -Value $vsanvmresults[$vmindex].physicalUsedMB -Membertype NoteProperty
+        $Details | Add-Member -Name "vSAN RealUsedMB" -Value $vsanvmresults[$vmindex].RealUsedMB -Membertype NoteProperty
+        $Details | Add-Member -Name "vSAN SecuredOptimizedUsedMB" -Value $vsanvmresults[$vmindex].SecuredOptimizedUsedMB -Membertype NoteProperty
+        $Details | Add-Member -Name "vSAN DedupCompressRatio" -Value $vsanvmresults[$vmindex].DedupCompressRatio -Membertype NoteProperty
+        $Details | Add-Member -Name "vSAN SLAFootPrint" -Value $vsanvmresults[$vmindex].vSANSLAFootPrint -Membertype NoteProperty
+    }
     $MyCollection += $Details
 }
 $Details = New-object PSObject	
