@@ -229,4 +229,5 @@ For ($i=$StartLevel; $i -le $Depth; $i++) {
 }
 $Folders | ft -AutoSize -Wrap
 $Folders | Export-Csv $reportpath -Delimiter ";" -NoTypeInformation 
+$Folders | out-gridview
 
