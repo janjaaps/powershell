@@ -1,14 +1,13 @@
-﻿
+﻿$Path = "u:\"     # starting path
+$reportpath =$env:USERPROFILE + "\Desktop\ACL.csv" #define path to export permissions report
+
 
 $StartLevel = 0 # 0 = include base folder, 1 = sub-folders only, 2 = start at 2nd level
 $Depth = 3      # How many levels deep to scan
-$Path = "u:\"     # starting path
-$reportpath =$env:USERPROFILE + "\Desktop\ACL.csv" #define path to export permissions report
 $FilterUnknownSIDs = $true # Filter om onbekende SID's weg te filteren
 
 Import-Module ActiveDirectory
 
-$env:USERPROFILE + "\Desktop"
 
 function Get-ADNestedGroupMembers { 
 <#  
