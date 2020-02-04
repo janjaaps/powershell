@@ -1,13 +1,13 @@
 ﻿$Path = "U:\"     # starting path
-$reportpath =$env:USERPROFILE + "\Desktop\ACL.csv" #define path to export permissions report
+$reportpath = $env:USERPROFILE + "\Desktop\ACL.csv" #define path to export permissions report
 
+#####
 
 $StartLevel = 0 # 0 = include base folder, 1 = sub-folders only, 2 = start at 2nd level
 $Depth = 3      # How many levels deep to scan
 $FilterUnknownSIDs = $true # Filter om onbekende SID's weg te filteren
 
 Import-Module ActiveDirectory
-
 
 function Get-ADNestedGroupMembers { 
 <#  
@@ -175,7 +175,7 @@ $modules = get-module | select -expand name
 }
 
 
-
+### Eigen scripting
 $Folders = @()
 For ($i=$StartLevel; $i -le $Depth; $i++) {
     $Levels = "\*" * $i
