@@ -9,6 +9,7 @@ $FilterUnknownSIDs = $true # Filter om onbekende SID's weg te filteren
 
 Import-Module ActiveDirectory
 
+
 function Get-ADNestedGroupMembers { 
 <#  
 .SYNOPSIS
@@ -179,8 +180,7 @@ $modules = get-module | select -expand name
 $Folders = @()
 For ($i=$StartLevel; $i -le $Depth; $i++) {
     $Levels = "\*" * $i
-    $Folder = (Resolve-Path $Path$Levels).ProviderPath | Get-Item | Where PsIsContainer 
-    $FolderACL = Get-Acl $Folder.FullName |  % { $_.access }
+    $FolderACL = (Resolve-Path $Path$Levels).ProviderPath | Get-Item | Where PsIsContainer | % { $path1 = $_.FullName ; Get-Acl $_.FullName |  % { $_.access | Add-Member -MemberType NoteProperty 'Path' -Value $Path1 -passthru } }
     foreach ($ACL in $FolderACL) {
         if (($FilterUnknownSIDs -eq $False) -or (($FilterUnknownSIDs -eq $True) -and ($ACL.IdentityReference.Value.StartsWith("S-1-") -eq $False))) {
             if ($i -gt 0 -and $ACL.IsInherited -eq $true) {
@@ -188,7 +188,7 @@ For ($i=$StartLevel; $i -le $Depth; $i++) {
             } else {
             #Root or Not Inherited
             $FolderEntry = new-object -TypeName PSObject
-            $FolderEntry | Add-Member -MemberType NoteProperty -Name Path -Value $Folder.FullName
+            $FolderEntry | Add-Member -MemberType NoteProperty -Name Path -Value $ACL.Path
             $FolderEntry | Add-Member -MemberType NoteProperty -Name ACL -Value ($ACL.FileSystemRights -replace ", ","`n" -replace "Synchronize","").TrimEnd()
             $FolderEntry | Add-Member -MemberType NoteProperty -Name Objects -Value $ACL.IdentityReference
 
@@ -197,15 +197,12 @@ For ($i=$StartLevel; $i -le $Depth; $i++) {
             $AdGroupUsers = ""
             $AdGroupNestedUsers = ""
             if ($ObjectClass -eq "group") {
-                #$AdGroupUsers = (Get-ADGroupMember -identity $AdObject).SamAccountName
-                #$AdGroupMembers = (Get-ADGroupMember -identity $AdObject).SamAccountName | sort -Descending
                 $AdGroupMembers = Get-ADGroupMember -identity $AdObject | % { get-adobject -properties displayname -filter {SamAccountName -eq $_.samaccountname} }  | sort -Descending
                 foreach ($User in $AdGroupMembers) {
                     if ($User.Displayname) { $UserEntry = $User.Displayname } else  {$UserEntry = $User.Name }
                     $AdGroupUsers = $UserEntry  + "," + $AdGroupUsers
                     $AdGroupUsers = $AdGroupUsers.TrimEnd(',')
                 }
-                #$AdGroupNestedMembers = Get-ADNestedGroupMembers $AdObject | where {$_.Type -eq "User"} | % {$_.SamAccountName } | sort -Descending
                 $AdGroupNestedMembers = Get-ADNestedGroupMembers $AdObject | where {$_.Type -eq "User"} | % {$_.Displayname } | sort -Descending
                 foreach ($NestedUser in $AdGroupNestedMembers) {
                     $AdGroupNestedUsers = $NestedUser  + "," + $AdGroupNestedUsers
@@ -230,4 +227,3 @@ For ($i=$StartLevel; $i -le $Depth; $i++) {
 $Folders | ft -AutoSize -Wrap
 $Folders | Export-Csv $reportpath -Delimiter ";" -NoTypeInformation 
 $Folders | out-gridview
-
