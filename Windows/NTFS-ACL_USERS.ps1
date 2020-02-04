@@ -1,4 +1,4 @@
-﻿$Path = "u:\"     # starting path
+﻿$Path = "U:\"     # starting path
 $reportpath =$env:USERPROFILE + "\Desktop\ACL.csv" #define path to export permissions report
 
 
@@ -198,13 +198,15 @@ For ($i=$StartLevel; $i -le $Depth; $i++) {
             $AdGroupNestedUsers = ""
             if ($ObjectClass -eq "group") {
                 #$AdGroupUsers = (Get-ADGroupMember -identity $AdObject).SamAccountName
-                $AdGroupMembers = (Get-ADGroupMember -identity $AdObject).SamAccountName | sort -Descending
+                #$AdGroupMembers = (Get-ADGroupMember -identity $AdObject).SamAccountName | sort -Descending
+                $AdGroupMembers = Get-ADGroupMember -identity $AdObject | % { get-adobject -properties displayname -filter {SamAccountName -eq $_.samaccountname} }  | sort -Descending
                 foreach ($User in $AdGroupMembers) {
-                    $AdGroupUsers = $User  + "," + $AdGroupUsers
+                    if ($User.Displayname) { $UserEntry = $User.Displayname } else  {$UserEntry = $User.Name }
+                    $AdGroupUsers = $UserEntry  + "," + $AdGroupUsers
                     $AdGroupUsers = $AdGroupUsers.TrimEnd(',')
                 }
-
-                $AdGroupNestedMembers = Get-ADNestedGroupMembers $AdObject | where {$_.Type -eq "User"} | % {$_.Name } | sort -Descending
+                #$AdGroupNestedMembers = Get-ADNestedGroupMembers $AdObject | where {$_.Type -eq "User"} | % {$_.SamAccountName } | sort -Descending
+                $AdGroupNestedMembers = Get-ADNestedGroupMembers $AdObject | where {$_.Type -eq "User"} | % {$_.Displayname } | sort -Descending
                 foreach ($NestedUser in $AdGroupNestedMembers) {
                     $AdGroupNestedUsers = $NestedUser  + "," + $AdGroupNestedUsers
                     $AdGroupNestedUsers = $AdGroupNestedUsers.TrimEnd(',')
@@ -227,5 +229,4 @@ For ($i=$StartLevel; $i -le $Depth; $i++) {
 }
 $Folders | ft -AutoSize -Wrap
 $Folders | Export-Csv $reportpath -Delimiter ";" -NoTypeInformation 
-
 
