@@ -360,34 +360,6 @@ $ToastXml.LoadXml($Toast.OuterXml)
 $MyEncodedNotification = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($MyNotification))
 
 
-
-Function VerifyCredProviderExclusion() {
-    $registryPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System"
-    $registryValueName = "ExcludedCredentialProviders"
-    $registryValueData = "{60b78e88-ead8-445c-9cfd-0b87f74ea6cd}" #Password Credential Provider
-
-    if((Test-Path $registryPath)) {
-        if(Get-ItemProperty -Path $registryPath -Name $registryValueName -ErrorAction Ignore) {
-            if((Get-ItemPropertyValue -Path $registryPath -Name $registryValueName -ErrorAction Ignore)-eq $registryValueData) {
-                Write-Host "Windows Hello for Business is already required. Do nothing"
-                exit 0
-            }
-            else {
-                Write-Host "Windows Hello for Business is currently not required, Remediate"
-                exit 1 
-            }
-        }
-        else {
-            Write-Host "Windows Hello for Business is currently not required, Remediate"
-            exit 1 
-        }
-    }
-    else {
-        Write-Host "Windows Hello for Business is currently not required, Remediate"
-        exit 1
-    }  
-}
-
 $Biometrics_Base64 = "iVBORw0KGgoAAAANSUhEUgAAAVAAAADJCAIAAAD6lP2xAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAgAElEQVR4nLy96ZMkx5Un9nvPIyKvqqz77hvdjW6ggcYNEiBBEhzOkHOtza60O3tpdiSNTB+0JtOfIDOZafVlzaQdSbuSjcnWxnYkUcsd7SzJmeFNgDhIEGgA3Y0+0Hd33XdlVR4R4e/pg3tERtbRAMkxORpVlZmRHu7P3/F7h3sQv/wbUAIYcD8VUACiCteyP0jdKyWF5p/uaQSQ+n9QVVWAoJx9LIBkHasCKu5LTP4e
 CsBYJgXgeoEQAQRAxZK7AgBYVbqvDmycT5DIAFCC+pH4eZHCzV1JlQmqIOqZFBGRIT8BUsredF+l7ju7qcGkgDIR7f3Q3ZzBBmAQlJTUd0IKVQtAWZQEAPs12tUUEL82GVUdSYj3uV/WZM8fvX32dkjCpICIigAQAhGIVFRBRAxVAcDd77EbPA5mmCI53KcHMRVnbxcG5aaZMy2ppn46bllzfiv0X+xEVVkfdgFltJbeC0hBgBxMWneBkwIQJLXqpSAbL4gc8+yZrvpuGcSeDTIqqWdOAUDCRKTk+Go31ympQsEMQIm6LMME
 QpAJwyc02o/oD//G3nn4v4kLUqr5hHo0RaGxggXkWTsT11+40V5p2XcutI8Kyb/b7cStq3tFAHQ/YXzIvYtN/V0PvEYp45OeNw+cw6drTt/uPyDtjkaVoARVyvjPc5FmvYgbDTnB9honG5jK/iPcJd4HSbsXvy4Lqf+h+6o/T5beqwuj3dVt4bIiIT9hvQ5sRAqjAGBUSSEEMIuIYyo3CRYQwdjulHKhdHpEGYIDRqD7WY29w6CMW4pKn0gJQUHaFbC/5Ez33LIgId5So2j8QblaFxVvzwiSUT2wCC0AWKNCsMRKAFmIFtb+
@@ -809,32 +781,36 @@ $BiometricsPNG = "C:\windows\temp\Biometrics.png"
 
 
 
-# Check for First and Second Factor previously used in registry
+# Values for First and Second Factor previously used in registry
 $LogonUIpath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
 $WHfBFactors = '{27FBDB57-B613-4AF2-9D7E-4FA7A66C21AD}','{8AF662BF-65A0-4D0A-A540-A338A999D36F}','{D6886603-9D2F-4EB2-B667-1971041FA96B}','{BEC09223-B018-416D-A0AC-523971B639F5}'
 $LastLoggedOnProvider = 'LastLoggedOnProvider'
 $SecondFactorLoggedOnProvider = 'SecondFactorLoggedOnProvider'
 
+# Values for Excluded Credential Providers
+$ExclCredProvregistryPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System"
+$ExclCredProvregistryValueName = "ExcludedCredentialProviders"
+$ExclCredProvregistryValueData = "{60b78e88-ead8-445c-9cfd-0b87f74ea6cd}" #Password Credential Provider
+
+
+#Start logic
 if (Test-Path -Path $LogonUIpath) {
-    $LastLoggedOnProviderValue = (Get-ItemProperty "$($LogonUIpath)" ).$LastLoggedOnProvider
-    $SecondFactorLoggedOnProviderValue = (Get-ItemProperty "$($LogonUIpath)" ).$SecondFactorLoggedOnProvider
-
-
-    if (($WHfBFactors -contains $LastLoggedOnProviderValue) -and ($WHfBFactors -contains $SecondFactorLoggedOnProviderValue)) {
-        Write-Output "All good. First and Second credential provider being used. This indicates that user is enrolled into WHfB. Go to next check" 
-        VerifyCredProviderExclusion
-    }
-
-    else {
-        Write-Output "First and Second Factor were not previously used. Exiting script with status 0. Do not go into Remediation mode"
-        [Runasuser.ProcessExtensions]::StartProcessAsCurrentUser("$env:windir\System32\WindowsPowerShell\v1.0\Powershell.exe", " -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -EncodedCommand $($MyEncodedNotification)") | Out-Null
-        exit 0
-    }
-
+    $LastLoggedOnProviderValue = (Get-ItemProperty "$($LogonUIpath)" -ErrorAction Ignore).$LastLoggedOnProvider
+    $SecondFactorLoggedOnProviderValue = (Get-ItemProperty "$($LogonUIpath)" -ErrorAction Ignore).$SecondFactorLoggedOnProvider
+}
+if (Test-Path -Path $ExclCredProvregistryPath) {
+    $ExclCredProvregistryValue = (Get-ItemProperty "$($ExclCredProvregistryPath)" -ErrorAction Ignore).$ExclCredProvregistryValueName
 }
 
 
-
-
-
-
+if ($ExclCredProvregistryValue -eq $registryValueData) {
+    Write-Host "Windows Hello for Business is already required and the Password Credential Provider already disabled. Do nothing"
+    exit 0
+} elseif (($WHfBFactors -contains $LastLoggedOnProviderValue) -and ($WHfBFactors -contains $SecondFactorLoggedOnProviderValue)) {
+        Write-Output "First and Second credential provider being used. This indicates that user is enrolled into WHfB. But Windows Hello for Business is currently not required, Password Credential Provider still enabled. Remediate"
+        exit 1 
+} else {
+    Write-Output "First and Second Factor were not previously used. Exiting script with status 0. Do not go into Remediation mode, but show toast notification"
+        [Runasuser.ProcessExtensions]::StartProcessAsCurrentUser("$env:windir\System32\WindowsPowerShell\v1.0\Powershell.exe", " -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -EncodedCommand $($MyEncodedNotification)") | Out-Null
+        exit 0
+}
