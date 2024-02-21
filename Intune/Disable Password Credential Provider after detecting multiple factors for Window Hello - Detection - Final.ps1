@@ -803,7 +803,7 @@ if (Test-Path -Path $ExclCredProvregistryPath) {
 }
 
 
-if ($ExclCredProvregistryValue -eq $registryValueData) {
+if ($ExclCredProvregistryValue -eq $ExclCredProvregistryValueData) {
     Write-Host "Windows Hello for Business is already required and the Password Credential Provider already disabled. Do nothing"
     exit 0
 } elseif (($WHfBFactors -contains $LastLoggedOnProviderValue) -and ($WHfBFactors -contains $SecondFactorLoggedOnProviderValue)) {
